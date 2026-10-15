@@ -47,9 +47,16 @@
 - 📲 **权限授权一键跳转**：通知使用权 / 短信权限 / 无障碍 都有引导按钮
 - 📋 **国产 ROM 后台白名单指南**：内置小米/华为/OPPO/vivo/三星/原生 6 家系统的具体设置路径，免去用户自己摸索
 
+### 应用自更新
+- 🔄 **打开应用自动检查**：启动时静默查一次 GitHub 私有仓库的 Release，发现新版本就在设置页显示出来（不弹窗、不打断）
+- 📦 **应用内下载并安装**：APK 直接下到本机，校验通过后拉起系统安装器。不用再把安装包传来传去
+- ✅ **装前四道校验**：SHA-256 摘要比对 → 包名必须是本应用 → **签名证书必须和当前安装的一致** → 版本号必须和发布说明一致。任一条不过就拒绝安装
+- 🔐 **更新源可配**：仓库地址和访问令牌在设置页填写。令牌只存本机，建议用只勾选这一个仓库的 fine-grained token，随时可在 GitHub 撤销
+- 🛠️ **一条命令发布**：`python scripts/publish_release.py --notes "改了什么"` —— 构建、打 tag、建 Release、传 APK 全自动
+
 ### 数据安全
 - 🔒 **完全本地存储**：所有交易数据存在本机 SQLite，无任何云端上传
-- 🚫 **不联网**：App 本身不需要网络权限（如果未来加云同步会另外申请）
+- 🌐 **网络只做一件事**：检查更新。只在「应用启动时静默检查」和「你手动点检查更新」这两个时机访问 GitHub Release 接口，**不上传任何账本数据**
 - 🚷 **排除自动备份**：DB 文件已在 `backup_rules.xml` 显式排除，不会被 Google Drive 备份或迁移到新设备
 
 ## 🛠 技术栈
@@ -65,6 +72,7 @@
 | 偏好存储 | DataStore Preferences 1.1 |
 | 图表 | Compose Canvas 自绘（不依赖图表库） |
 | 账单解压 | zip4j 2.11.5（JDK 自带 ZipInputStream 不支持 ZipCrypto/AES 加密条目） |
+| 应用更新 | GitHub Releases API + HttpURLConnection + FileProvider（**不引入网络库**） |
 | 构建 | AGP 8.7.3 + Gradle 8.9 + Java 17 |
 | 最低 Android 版本 | API 24 (Android 7.0) |
 | 目标 SDK | API 35 (Android 15) |
@@ -91,6 +99,14 @@ app/src/main/java/com/bookkeeping/app/
 │   ├── CsvTable.kt                 # RFC 4180 CSV 解析
 │   ├── BillStatementParser.kt      # 支付宝 / 微信账单列匹配与逐行解析
 │   └── BillImporter.kt             # 串联：解压 → 解析 → 去重 → 入库 → 汇总
+├── update/                         # 应用自更新
+│   ├── GitHubUpdateSource.kt       # 从私有仓库读最新 Release
+│   ├── ReleaseJson.kt              # Release JSON 解析（纯逻辑，可单测）
+│   ├── ApkDownloader.kt            # 下载 APK（自处理重定向，逐跳强制 HTTPS）
+│   ├── ApkVerifier.kt              # 摘要 / 包名 / 签名 / 版本号四道校验
+│   ├── ApkInstaller.kt             # FileProvider + 拉起系统安装器
+│   ├── AppUpdater.kt               # 流程编排
+│   └── StartupUpdateCheck.kt       # 启动时静默检查一次
 ├── notification/                   # 自动抓取核心
 │   ├── PaymentNotificationListenerService.kt  # 通知监听 Service
 │   ├── NotificationParser.kt                  # 支付宝/微信解析
@@ -110,7 +126,10 @@ app/src/main/java/com/bookkeeping/app/
         ├── importer/                          # 导入 tab（选文件 / 输密码 / 结果汇总）
         ├── stats/                             # 统计 tab
         ├── budget/                            # 预算 tab
-        └── settings/                          # 设置 tab（权限引导 + ROM 指南）
+        └── settings/                          # 设置 tab（权限引导 + ROM 指南 + 应用更新）
+
+scripts/
+└── publish_release.py                         # 构建 + 发布 APK 到 GitHub Release
 ```
 
 ## ⚠️ 已知限制
@@ -183,6 +202,18 @@ cd seamless-bookkeeping
 # 输出：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### 发布新版本（改完代码同步到手机）
+
+不用再手动把 APK 传手机：
+
+1. 改 `app/build.gradle.kts` 里的 `versionCode`（**必须比上一版大**）和 `versionName`
+2. 准备一个有该仓库 `Contents` / `Releases` 写权限的 token，导出成环境变量 `GITHUB_TOKEN`
+3. 一条命令发布：`python scripts/publish_release.py --notes "这次改了什么"`
+4. 手机上打开应用 → **设置 → 应用更新 → 检查更新 → 下载并安装**
+
+> 首次使用要在手机的「更新源设置」里填一次访问令牌。建议签发 fine-grained token，
+> 只勾选这一个仓库的 `Contents` / `Releases` **只读**权限就够了（手机上只是读取版本信息）。
+
 ## 📥 怎么导入历史账单
 
 1. 先在支付宝/微信里申请账单导出，文件会发到你填的邮箱
@@ -206,13 +237,16 @@ cd seamless-bookkeeping
 | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_DATA_SYNC` | 前台保活服务 | 用户开启保活时使用 |
 | `BIND_ACCESSIBILITY_SERVICE` | 无障碍兜底（微信红包/转账 / 支付宝转账入账） | 可选，只在用户主动到系统无障碍设置勾选时生效 |
 | 无（文件选择器） | 导入账单时读取你在系统文件选择器里选中的那一个文件 | 走 SAF，**不申请任何存储权限** |
+| `INTERNET` / `ACCESS_NETWORK_STATE` | 检查更新、下载新版本 APK | 仅用于更新，不传输账本数据 |
+| `REQUEST_INSTALL_PACKAGES` | 下载完新版本后提请系统安装器安装 | 需要你另外在系统设置里允许「安装未知应用」 |
 
 **关于隐私**：
 - 所有数据 **只存在你本机的 SQLite**，没有任何后端服务器
-- App **不联网**（未来如果加云同步会单独申请权限并明确说明）
+- **网络只用于检查/下载更新**：只在应用启动时静默检查一次，或你手动点「检查更新」时访问 GitHub Release 接口。请求里只有仓库名，没有任何账本、短信、通知内容
 - 短信和通知 **不会被发送到任何第三方**
 - **账单文件不会被留存**：导入时只读取你在文件选择器里选中的那一个文件；解压用的临时文件在解析完成的那一刻就删掉了
 - **账单压缩包的密码不落盘**：只在你输入后用于本次解压，不写进数据库或偏好设置
+- **更新用的访问令牌只存本机**，且只用在访问你自己那个仓库上；随时可以在 GitHub 撤销
 - 代码完全开源，可自行审计
 
 ## 🙏 致谢

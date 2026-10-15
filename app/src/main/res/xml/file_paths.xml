@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 的可见范围：只暴露应用私有目录下的 updates/ 子目录，
+  也就是下载好的更新包存放的位置。不要把 filesDir 整个暴露出去。
+-->
+<paths>
+    <files-path
+        name="updates"
+        path="updates/" />
+</paths>

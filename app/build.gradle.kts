@@ -14,9 +14,11 @@ android {
         applicationId = "com.bookkeeping.app"
         minSdk = 24
         targetSdk = 35
-        // 1.x 基线由上游项目提供；本次新增账单导入后升到 1.1.0
-        versionCode = 2
-        versionName = "1.1.0"
+        // 1.x 基线由上游项目提供
+        // 1.1.0 / 2：新增支付宝、微信账单导入
+        // 1.2.0 / 3：新增应用内整包自更新
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -82,6 +84,9 @@ dependencies {
 
     // 测试
     testImplementation(libs.junit)
+    // Android 里的 org.json 在 JVM 单测中是空壳实现（调用即抛 "Stub!"），
+    // 而更新模块的 Release 解析是纯逻辑、值得单测，所以给测试补一份真实实现。
+    testImplementation(libs.org.json)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

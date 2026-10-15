@@ -7,19 +7,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -32,18 +40,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bookkeeping.app.notification.accessibility.AccessibilityCaptureService
+import com.bookkeeping.app.update.RemoteRelease
+import com.bookkeeping.app.update.UpdateInstallState
+import com.bookkeeping.app.update.UpdateSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val keepAlive by viewModel.keepAliveEnabled.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val updateSource by viewModel.updateSource.collectAsState()
     val context = LocalContext.current
+    var showUpdateSourceDialog by remember { mutableStateOf(false) }
 
     // 无障碍服务的"是否已被系统勾选"状态。
     // 用户从无障碍设置返回时（ON_RESUME）重新读一次。
@@ -120,7 +135,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             item { SectionTitle("国产 ROM 后台白名单（重要）") }
             item { RomGuideCard() }
+
+            item { SectionTitle("应用更新") }
+            item {
+                UpdateCard(
+                    state = updateState,
+                    currentVersionName = viewModel.currentVersionName,
+                    currentVersionCode = viewModel.currentVersionCode,
+                    source = updateSource,
+                    onCheck = viewModel::checkForUpdate,
+                    onDownload = viewModel::downloadUpdate,
+                    onOpenPermission = viewModel::openInstallPermission,
+                    onRetryInstall = viewModel::retryInstall,
+                    onEditSource = { showUpdateSourceDialog = true },
+                    onDismissMessage = viewModel::dismissUpdateMessage,
+                )
+            }
         }
+    }
+
+    if (showUpdateSourceDialog) {
+        UpdateSourceDialog(
+            initial = updateSource,
+            onSave = { owner, repo, token ->
+                viewModel.saveUpdateSource(owner, repo, token)
+                showUpdateSourceDialog = false
+            },
+            onDismiss = { showUpdateSourceDialog = false },
+        )
     }
 }
 
@@ -312,3 +354,239 @@ private fun RomEntry(brand: String, path: String) {
         )
     }
 }
+
+// ===== 应用更新 =====
+
+@Composable
+private fun UpdateCard(
+    state: UpdateUiState,
+    currentVersionName: String,
+    currentVersionCode: Long,
+    source: UpdateSource,
+    onCheck: () -> Unit,
+    onDownload: () -> Unit,
+    onOpenPermission: () -> Unit,
+    onRetryInstall: () -> Unit,
+    onEditSource: () -> Unit,
+    onDismissMessage: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "当前版本 $currentVersionName ($currentVersionCode)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "从这个仓库检查新版本并直接安装，不用每次手动传 APK：" +
+                       "\n${source.owner}/${source.repo}" +
+                       if (source.isConfigured) "" else "（尚未填写访问令牌）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onCheck, enabled = !state.checking) {
+                    Text(if (state.checking) "正在检查…" else "检查更新")
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onEditSource) { Text("更新源设置") }
+            }
+
+            state.checkMessage?.let { message ->
+                UpdateNotice(message, onDismiss = onDismissMessage)
+            }
+
+            state.latest?.let { release ->
+                ReleasePanel(release = release, onDownload = onDownload)
+            }
+
+            InstallStatusPanel(
+                install = state.install,
+                onOpenPermission = onOpenPermission,
+                onRetryInstall = onRetryInstall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpdateNotice(message: String, onDismiss: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onDismiss) { Text("知道了") }
+    }
+}
+
+@Composable
+private fun ReleasePanel(release: RemoteRelease, onDownload: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    ) {
+        HorizontalDivider()
+        Text(
+            text = "发现新版本 ${release.versionName}",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        if (release.notes.isNotBlank()) {
+            Text(
+                text = release.notes,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (release.sizeBytes > 0) {
+            Text(
+                text = "安装包大小 ${formatMegabytes(release.sizeBytes)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Button(
+            onClick = onDownload,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+        ) {
+            Text("下载并安装")
+        }
+    }
+}
+
+@Composable
+private fun InstallStatusPanel(
+    install: UpdateInstallState,
+    onOpenPermission: () -> Unit,
+    onRetryInstall: () -> Unit,
+) {
+    when (install) {
+        UpdateInstallState.Idle,
+        is UpdateInstallState.ReadyToInstall -> Unit
+
+        is UpdateInstallState.Downloading -> Column(modifier = Modifier.padding(top = 12.dp)) {
+            LinearProgressIndicator(
+                progress = { install.percent / 100f },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "正在下载… ${install.percent}%" +
+                       if (install.totalBytes > 0) "（${formatMegabytes(install.downloadedBytes)} / " +
+                           "${formatMegabytes(install.totalBytes)}）" else "",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+
+        UpdateInstallState.Verifying -> Column(modifier = Modifier.padding(top = 12.dp)) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                text = "正在校验安装包（包名 / 签名 / 摘要）…",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+
+        is UpdateInstallState.NeedInstallPermission -> Column(modifier = Modifier.padding(top = 12.dp)) {
+            Text(
+                text = "安装包已下载并校验通过，但系统还没允许本应用「安装未知应用」。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                Button(onClick = onOpenPermission) { Text("去开启权限") }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onRetryInstall) { Text("我已开启，继续安装") }
+            }
+        }
+
+        is UpdateInstallState.Failed -> Text(
+            text = install.message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
+
+@Composable
+private fun UpdateSourceDialog(
+    initial: UpdateSource,
+    onSave: (owner: String, repo: String, token: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var owner by remember { mutableStateOf(initial.owner) }
+    var repo by remember { mutableStateOf(initial.repo) }
+    var token by remember { mutableStateOf(initial.token) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("更新源设置") },
+        text = {
+            Column {
+                Text(
+                    text = "从你自己的 GitHub 私有仓库读取新版本。私有仓库需要访问令牌才能读取 Release。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = owner,
+                    onValueChange = { owner = it },
+                    label = { Text("仓库所有者") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = repo,
+                    onValueChange = { repo = it },
+                    label = { Text("仓库名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text("访问令牌（token）") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "建议在 GitHub 上签发 fine-grained token，只勾选这一个仓库的 " +
+                           "Contents / Releases 只读权限。令牌只保存在本机，随时可以在 GitHub 撤销。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(owner, repo, token) }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+private fun formatMegabytes(bytes: Long): String =
+    "%.1f MB".format(bytes / 1024.0 / 1024.0)

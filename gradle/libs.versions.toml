@@ -24,6 +24,8 @@ coroutines = "1.9.0"
 datastore = "1.1.1"
 vico = "2.0.0"
 zip4j = "2.11.5"
+# 仅用于单元测试：Android 自带的 org.json 在 JVM 单测里是空壳实现，会抛 "Stub!"
+orgJson = "20240303"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -70,6 +72,9 @@ vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", ve
 
 # zip4j：账单导入需要解开带密码的 zip（JDK 自带 ZipInputStream 不支持 ZipCrypto/AES）
 zip4j = { group = "net.lingala.zip4j", name = "zip4j", version.ref = "zip4j" }
+
+# 单元测试用的 JSON 实现（Android 的 org.json 在 JVM 下不可用）
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

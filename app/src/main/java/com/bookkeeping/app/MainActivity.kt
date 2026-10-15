@@ -13,7 +13,10 @@ import com.bookkeeping.app.data.settings.SettingsPreferences
 import com.bookkeeping.app.notification.KeepAliveService
 import com.bookkeeping.app.ui.navigation.RootNavigation
 import com.bookkeeping.app.ui.theme.BookkeepingAppTheme
+import com.bookkeeping.app.update.StartupUpdateCheck
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import javax.inject.Inject
 
 // @AndroidEntryPoint = 让 Hilt 能给这个 Activity 及其下属 Composable 注入依赖
@@ -21,6 +24,8 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settings: SettingsPreferences
+
+    @Inject lateinit var startupUpdateCheck: StartupUpdateCheck
 
     // Android 13+ 必须运行时申请 POST_NOTIFICATIONS，否则前台服务的常驻通知不可见
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -43,6 +48,12 @@ class MainActivity : ComponentActivity() {
             BookkeepingAppTheme {
                 RootNavigation()
             }
+        }
+
+        // 打开应用时静默检查一次更新：失败 / 没配 token 都不打扰用户，
+        // 只有真的发现新版本才在设置页里显示出来。
+        lifecycleScope.launch {
+            startupUpdateCheck.runQuietly()
         }
     }
 
