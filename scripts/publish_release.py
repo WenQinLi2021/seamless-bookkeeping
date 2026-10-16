@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """构建 debug APK 并发布到 GitHub Release，供手机端「设置 → 应用更新」直接安装。
 
-为什么需要它：应用内更新要有一个"能在手机上访问到的、带权限控制的下载地址"。
-GitHub Release 正好满足——仓库是私有的，APK 放上去只有带 token 的人能拿。
+为什么需要它：应用内更新要有一个"手机能访问到的下载地址"。GitHub Release 正好满足——
+打 tag、传 APK、写更新说明一次搞定，不用另外找地方托管安装包。
+
+仓库是**公开**的，所以手机端检查更新、下载 APK 都不需要任何凭据，零配置。
+（发布这一步本身需要写权限，所以脚本还是要一个 token。）
 
 用法
 ----
-    # 先在 GitHub 上签发一个有该仓库 Contents/Releases 写权限的 token
+    # 需要一个对该仓库有 Contents/Releases 写权限的 token
     export GITHUB_TOKEN=ghp_xxx          # 或者交给下面的 token 文件
     python scripts/publish_release.py --notes "修复了 xx"
 

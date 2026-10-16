@@ -32,11 +32,12 @@ class SettingsPreferences @Inject constructor(
     }
 
     /**
-     * 更新源。仓库默认指向本项目的私有仓库，用户只需要补一个能读 Release 的 token。
+     * 更新源。默认指向本项目自己的仓库，而这个仓库是**公开**的，所以手机端什么都不用填
+     * 就能检查更新——零配置。
      *
-     * 注意：token 以明文存在本机 DataStore 里。这是个人自用项目的取舍——私有仓库的
-     * Release 必须带 token 才能下载，而本项目又没有任何后端可以代持凭据。
-     * 建议只签发**仅对这一个仓库有只读权限**的 fine-grained token，且随时可在 GitHub 撤销。
+     * [token] 是给"万一改回私有仓库"留的后路：把仓库设为私有后，在这里填一个只读令牌
+     * 即可，其余逻辑不用动。注意令牌以明文存在本机 DataStore 里（本项目没有后端可以
+     * 代持凭据），所以只建议签发**仅对该仓库只读**的 fine-grained token，随时可撤销。
      */
     fun observeUpdateSource(): Flow<UpdateSource> =
         context.settingsDataStore.data.map { preferences ->

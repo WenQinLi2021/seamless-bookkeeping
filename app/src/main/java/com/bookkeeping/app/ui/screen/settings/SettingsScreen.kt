@@ -380,7 +380,7 @@ private fun UpdateCard(
             Text(
                 text = "从这个仓库检查新版本并直接安装，不用每次手动传 APK：" +
                        "\n${source.owner}/${source.repo}" +
-                       if (source.isConfigured) "" else "（尚未填写访问令牌）",
+                       if (source.hasToken) "（已配置访问令牌）" else "（未使用访问令牌）",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -541,7 +541,8 @@ private fun UpdateSourceDialog(
         text = {
             Column {
                 Text(
-                    text = "从你自己的 GitHub 私有仓库读取新版本。私有仓库需要访问令牌才能读取 Release。",
+                    text = "从你自己的 GitHub 仓库读取新版本。公开仓库不需要令牌，" +
+                           "只有私有仓库才需要填一个只读令牌。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -565,15 +566,15 @@ private fun UpdateSourceDialog(
                 OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },
-                    label = { Text("访问令牌（token）") },
+                    label = { Text("访问令牌（公开仓库留空）") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "建议在 GitHub 上签发 fine-grained token，只勾选这一个仓库的 " +
-                           "Contents / Releases 只读权限。令牌只保存在本机，随时可以在 GitHub 撤销。",
+                    text = "公开仓库留空即可。私有仓库需要 fine-grained token，只勾选该仓库的 " +
+                           "Contents / Releases 只读权限；令牌只保存在本机，随时可以在 GitHub 撤销。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

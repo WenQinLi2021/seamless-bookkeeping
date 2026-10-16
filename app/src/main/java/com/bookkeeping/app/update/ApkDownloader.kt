@@ -16,11 +16,11 @@ import javax.inject.Singleton
 /**
  * 把 APK 下载到应用私有目录。
  *
- * 私有仓库的 Release asset 必须带 token 访问，所以下载走的是 GitHub 的 asset API
- * 地址（`/releases/assets/{id}`）而不是页面上的下载链接。这个接口会先返回 302
- * 跳到 GitHub 的预签名地址（`release-assets.githubusercontent.com`），所以这里自己
- * 处理重定向——顺便可以保证每一跳都是 HTTPS（避免被中间人换掉安装包），
- * 并把令牌限制在 api.github.com 这一个主机上。
+ * 下载走的是 GitHub 的 asset API 地址（`/releases/assets/{id}`）而不是页面上的下载
+ * 链接：这个接口会先返回 302 跳到 GitHub 的预签名地址
+ * （`release-assets.githubusercontent.com`），所以这里自己处理重定向——顺便可以保证
+ * 每一跳都是 HTTPS（避免被中间人换掉安装包），并把令牌限制在 api.github.com 这一个主机上
+ * （公开仓库根本没有令牌，只有私有仓库才需要）。
  */
 @Singleton
 class ApkDownloader @Inject constructor(

@@ -87,7 +87,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val next = when (val result = updater.checkForUpdate()) {
                 UpdateCheckResult.NotConfigured -> UpdateUiState(
-                    checkMessage = "还没有配置更新源。请在下面填入能读取该私有仓库的访问令牌。"
+                    checkMessage = "还没有配置更新源。请在「更新源设置」里填写仓库所有者和仓库名。"
                 )
                 is UpdateCheckResult.UpToDate -> UpdateUiState(
                     checkMessage = "已经是最新版本（${result.currentVersionName}）"

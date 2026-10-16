@@ -15,8 +15,11 @@ import javax.inject.Singleton
 /**
  * 从 GitHub Releases 读最新版本。
  *
- * 为什么用 Release 而不是自己维护一个 version.json：仓库本身就是私有的，Release 是
- * GitHub 自带的、有权限控制的发布通道，不用另外找地方托管 APK。
+ * 为什么用 Release 而不是自己维护一个 version.json：Release 是 GitHub 自带的发布通道，
+ * 打 tag、传 APK、写更新说明一次搞定，不用另外找地方托管安装包。
+ *
+ * 仓库默认是公开的，所以这里**不带令牌**也能工作——手机端零配置。令牌是留给
+ * "万一改回私有仓库"的场景：填了就带上，没填就当公开仓库访问。
  *
  * 约定（由 `scripts/publish_release.py` 保证）：
  * - tag 形如 `v1.2.0`
@@ -79,13 +82,16 @@ class GitHubUpdateSource @Inject constructor(
         val userMessage: String
             get() = when (code) {
                 HttpURLConnection.HTTP_UNAUTHORIZED ->
-                    "访问令牌无效或已过期。请重新生成一个能读取该仓库的 token。"
+                    "访问令牌无效或已过期。请重新生成一个只读令牌（公开仓库可以直接把令牌留空）。"
                 HttpURLConnection.HTTP_FORBIDDEN ->
-                    "令牌权限不足，或者触发了 GitHub 的接口限流。\n" +
+                    "GitHub 拒绝了这次请求，通常是接口限流——匿名访问每小时额度较低，稍后再试。\n" +
+                        "如果仓库是私有的，也可能是令牌权限不足：" +
                         "请确认 token 至少有该仓库的「只读 Contents / Releases」权限。"
                 HttpURLConnection.HTTP_NOT_FOUND ->
                     "找不到仓库或还没有发布过版本。\n" +
-                        "请确认仓库名填写正确，且已经在 GitHub 上发布过 Release。"
+                        "请确认仓库名填写正确，且已经在 GitHub 上发布过 Release。\n" +
+                        "注意：如果是私有仓库且没填令牌，GitHub 也会返回 404，" +
+                        "这种情况下需要在「更新源设置」里补一个只读访问令牌。"
                 else -> "GitHub 返回了 HTTP $code。${body.take(160)}"
             }
     }

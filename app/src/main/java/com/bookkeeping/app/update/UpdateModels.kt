@@ -10,7 +10,7 @@ data class RemoteRelease(
     val versionCode: Int,
     val versionName: String,
     val notes: String,
-    /** APK 的下载地址（GitHub Release asset 的 API 地址，私有仓库需要带 token 访问）。 */
+    /** APK 的下载地址（GitHub Release asset 的 API 地址；私有仓库要带 token，公开仓库直接下）。 */
     val downloadUrl: String,
     val assetName: String,
     val sizeBytes: Long,
@@ -51,12 +51,22 @@ sealed interface UpdateInstallState {
     data class Failed(val message: String) : UpdateInstallState
 }
 
-/** 更新源的配置。私有仓库需要 token 才能读 Release。 */
+/**
+ * 更新源的配置。
+ *
+ * 仓库公开时 [token] 留空即可（本项目默认就是公开仓库，手机端零配置）。
+ * 如果哪天把仓库改回私有，再补一个只读令牌就行，判断逻辑不用动。
+ */
 data class UpdateSource(
     val owner: String,
     val repo: String,
     val token: String,
 ) {
+    /** 只要知道去哪找就够了——令牌是可选的，公开仓库不需要。 */
     val isConfigured: Boolean
-        get() = owner.isNotBlank() && repo.isNotBlank() && token.isNotBlank()
+        get() = owner.isNotBlank() && repo.isNotBlank()
+
+    /** 是否配了访问令牌（私有仓库才需要）。 */
+    val hasToken: Boolean
+        get() = token.isNotBlank()
 }

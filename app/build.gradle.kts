@@ -17,8 +17,9 @@ android {
         // 1.x 基线由上游项目提供
         // 1.1.0 / 2：新增支付宝、微信账单导入
         // 1.2.0 / 3：新增应用内整包自更新
-        versionCode = 3
-        versionName = "1.2.0"
+        // 1.2.1 / 4：更新源改为公开仓库，手机端零配置（令牌变为可选）
+        versionCode = 4
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
